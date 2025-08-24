@@ -45,35 +45,63 @@ def cartesian_differences(x, y):
     return Counter(tuple(d.tolist()) for d in diffs).most_common(1)
 
 
-def find_shift(x, y, previous_shift=np.array([0, 0, 0])):
+def find_shift(x, y, overlap_thr=12):
     """Compute the position of a scanner w.r.t. to a reference scanner
     in case their beacons overlap to a sufficient extent."""
     for rotation in generate_rotations():
-        R = generate_matrix(rotation)
-        rotated_y = (R @ y.T).T
+        rotation_matrix = generate_matrix(rotation)
+        rotated_y = (rotation_matrix @ y.T).T
         res = cartesian_differences(x, rotated_y)
-        if res[0][1] > 11:
-            new_shift = np.array(res[0][0]) + previous_shift
-            return new_shift, new_shift + rotated_y
-
+        if res[0][1] >= overlap_thr:
+            shift = np.array(res[0][0])
+            return shift, shift + rotated_y
 
 def search(data):
+    matrices = [data[0]]
+    queue = deque([data[0]])
     explored = {0}
-    all_cubes = set(range(len(data)))
-    queue = deque([0])
-    probes = [data[0]]
+    scanners = [np.array([0, 0, 0])]
     while queue:
-        d = data[queue.pop()]
-        for i in (all_cubes - explored):
-            res = find_shift(d, data[i])
-            if res is not None:
-                probes.append(res)
-                explored.add(i)
-                queue.appendleft(i)
-    out = np.concat(probes, axis=0)
-    return np.unique(out, axis=0)
+        d = queue.pop()
+        for i in range(len(data)):
+            if i not in explored:
+                res = find_shift(d, data[i])
+                if res is not None:
+                    explored.add(i)
+                    queue.append(res[1])
+                    matrices.append(res[1])
+                    scanners.append(res[0])
+    return np.unique(np.concat(matrices, axis=0), axis=0), scanners
+
+
+def manhattan_distance(b1, b2):
+    """Manhattan distance between two beacons."""
+    return abs(b1 - b2).sum()
+
+
+def part1():
+    # data = read_data("../data/d19_test.txt")
+    data = read_data("../data/d19_input_p1.txt")
+    res, scanners = search(data)
+    print(f"Number of beacons: {res.shape}")
+    max_dist = 0
+    for i in range(len(scanners) - 1):
+        for j in range(i, len(scanners)):
+            d = manhattan_distance(scanners[i], scanners[j])
+            if d > max_dist:
+                max_dist = d
+    print(f"Max. Manhattan distance among scanners: {max_dist}")
 
 
 if __name__ == '__main__':
-    data = read_data('../data/d19_test.txt')
+    part1()
     # (0,1), (1,3), (1,4), (2,4)
+    # d1 = find_shift(data[0], data[1])
+    # d4 = find_shift(d1, data[4])
+    # d3 = find_shift(d1, data[3])
+    # d2 = find_shift(d4, data[2])
+    # res = [data[0], d1, d2, d3, d4]
+    # out = np.unique(np.concat(res, axis=0), axis=0)
+    # print(out.shape[0])  # 79
+    # data = read_data("../data/d19_input_p1.txt")
+    
